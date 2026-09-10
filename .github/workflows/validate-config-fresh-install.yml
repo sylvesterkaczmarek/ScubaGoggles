@@ -1,0 +1,59 @@
+name: Validate fresh-install configuration loading
+on:
+  push:
+    branches: [validation/config-fresh-install]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare clean candidate
+        run: |
+          cp scubagoggles/Testing/Unit/Python/test_config_fresh_install.py "$RUNNER_TEMP/test_config_fresh_install.py"
+          git switch -c fix/config-without-legacy-file 2dda8c88fd021e782be93d317af5086f59cc508a
+          cp "$RUNNER_TEMP/test_config_fresh_install.py" scubagoggles/Testing/Unit/Python/test_config_fresh_install.py
+          python -m pip install -e '.[ui]' pytest pytest-subtests pytest-mock pylint parameterized
+      - name: Reproduce missing-legacy-file crashes
+        run: |
+          set +e
+          python -m pytest -q scubagoggles/Testing/Unit/Python/test_config_fresh_install.py > "$RUNNER_TEMP/before.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/before.log"
+          test "$result" -eq 1
+          grep -q '3 failed, 4 passed' "$RUNNER_TEMP/before.log"
+      - name: Guard legacy-file identity checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scubagoggles/config.py')
+          source = path.read_text()
+          old = '        if (not (config_path.is_file()\n'
+          new = '        if (not (self._legacy_config_file.is_file()\n            and config_path.is_file()\n'
+          assert source.count(old) == 1
+          path.write_text(source.replace(old, new, 1))
+          PY
+      - name: Run focused and full Python suites
+        run: |
+          python -m pytest -q scubagoggles/Testing/Unit/Python/test_config_fresh_install.py
+          python -m pytest -q scubagoggles/Testing/Unit/Python
+          python -m pylint scubagoggles/config.py
+          python -m pylint --disable=redefined-outer-name scubagoggles/Testing/Unit/Python/test_config_fresh_install.py
+          python -m py_compile scubagoggles/config.py scubagoggles/Testing/Unit/Python/test_config_fresh_install.py
+          git diff --check
+      - name: Publish only the tested changes
+        run: |
+          git add scubagoggles/config.py scubagoggles/Testing/Unit/Python/test_config_fresh_install.py
+          git config user.name 'Sylvester Kaczmarek'
+          git config user.email '16242628+sylvesterkaczmarek@users.noreply.github.com'
+          git commit -s -m 'Load custom configurations when the legacy defaults file is absent'
+          git push origin HEAD:refs/heads/fix/config-without-legacy-file
+          git log -1 --format='%H %s'
