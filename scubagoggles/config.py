@@ -181,7 +181,8 @@ class UserConfig:
         config_path = (Path(os.path.expandvars(config_file))
                        if config_file else self._legacy_config_file)
 
-        if (not (config_path.is_file()
+        if (not (self._legacy_config_file.is_file()
+            and config_path.is_file()
             and config_path.samefile(self._legacy_config_file))):
             return
 
