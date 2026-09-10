@@ -1,0 +1,43 @@
+name: Validate OPA executable paths
+on:
+  push:
+    branches:
+      - validation/getopa-literal-executable-paths
+permissions:
+  contents: read
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install project and test dependencies
+        run: python -m pip install '.[ui]' pytest pytest-mock pytest-subtests pylint
+      - name: Reproduce the original failure
+        shell: bash
+        run: |
+          cp scubagoggles/getopa.py /tmp/getopa-fixed.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scubagoggles/getopa.py')
+          source = p.read_text()
+          old = "[str(opa_exe_file.resolve()), 'version']"
+          assert source.count(old) == 1
+          p.write_text(source.replace(old, "f'{opa_exe_file} version'.split()"))
+          PY
+          set +e
+          python -m pytest -q scubagoggles/Testing/Unit/Python/test_getopa_paths.py > /tmp/getopa-before.log 2>&1
+          result=$?
+          set -e
+          cp /tmp/getopa-fixed.py scubagoggles/getopa.py
+          cat /tmp/getopa-before.log
+          test "$result" -eq 1
+      - name: Run focused regression tests
+        run: python -m pytest -q scubagoggles/Testing/Unit/Python/test_getopa_paths.py
+      - name: Run complete Python unit suite
+        run: python -m pytest -q scubagoggles/Testing/Unit/Python
+      - name: Lint changed Python files
+        run: python -m pylint -d R0913,R0914,R0915,R1702,W0718,W0719,R0801 scubagoggles/getopa.py scubagoggles/Testing/Unit/Python/test_getopa_paths.py
