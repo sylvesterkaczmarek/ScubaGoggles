@@ -5,6 +5,7 @@ location, and the OPA executable location.
 
 import os
 
+from copy import deepcopy
 from typing import Iterable, Union
 from pathlib import Path
 
@@ -57,7 +58,7 @@ class UserConfig:
             self._validate()
             self._file_exists = True
         else:
-            self._doc = dict(self._defaults)
+            self._doc = deepcopy(self._defaults)
             self._file_exists = False
 
     @property

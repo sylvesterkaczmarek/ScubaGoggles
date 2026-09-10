@@ -118,3 +118,25 @@ class TestUserConfig:
 
         # Verify the error message contains the invalid key
         assert 'invalid_key' in str(exc_info.value)
+
+    @pytest.mark.parametrize('setting', ['output_dir', 'opa_dir', 'credentials_file'])
+    def test_new_configs_do_not_share_settings(self, tmp_path, setting, mocker):
+        """Changing one configuration must not alter other instances or defaults."""
+        mocker.patch.object(UserConfig, '_transition_config_file')
+        first = UserConfig(tmp_path / 'first.yaml')
+        second = UserConfig(tmp_path / 'second.yaml')
+        original_value = getattr(second, setting)
+        custom_value = tmp_path / 'custom'
+
+        setattr(first, setting, custom_value)
+
+        assert getattr(first, setting) == custom_value
+        assert getattr(second, setting) == original_value
+        third = UserConfig(tmp_path / 'third.yaml')
+        assert getattr(third, setting) == original_value
+
+        # Persisting one configuration must not write another instance's values.
+        first.write()
+        second.write()
+        assert getattr(UserConfig(first.config_path), setting) == custom_value
+        assert getattr(UserConfig(second.config_path), setting) == original_value
