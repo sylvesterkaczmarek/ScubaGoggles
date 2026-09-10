@@ -10,8 +10,13 @@ from scubagoggles.config import UserConfig
 
 @pytest.fixture
 def isolated_defaults(tmp_path, monkeypatch):
-    """Keep migration and configuration writes inside the temporary directory."""
+    """Keep migration, defaults and writes isolated from other tests."""
     legacy = tmp_path / '.scubagoggles'
+    defaults = {'scubagoggles': {
+        'opa_dir': '~/.scubagoggles', 'output_dir': './', 'credentials': None,
+    }}
+    monkeypatch.setattr(UserConfig, '_defaults', defaults)
+    monkeypatch.setattr(UserConfig, '_main', defaults['scubagoggles'])
     monkeypatch.setattr(UserConfig, '_legacy_config_file', legacy)
     monkeypatch.setattr(UserConfig, '_default_config_file', legacy / 'userdefaults.yaml')
     return legacy
